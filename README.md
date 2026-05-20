@@ -15,6 +15,10 @@ View your app in AI Studio: https://ai.studio/apps/5593aac4-5cbd-4c1f-a108-5a214
 
 1. Install dependencies:
    `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
+2. Set `VERUS_RPC_URL` in [.env.local](.env.local) if your verusd testnet RPC is not on `http://127.0.0.1:27486`
+3. Optionally set `VERUS_RPC_USER` and `VERUS_RPC_PASSWORD` if your RPC requires auth
+4. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
+5. Run the app:
    `npm run dev`
+
+The coming-soon subscription now accepts VerusID / i-address entries and queues Verus-native alerts through the local backend.

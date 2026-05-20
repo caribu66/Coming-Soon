@@ -11,6 +11,9 @@ import {
   X,
   Loader2,
   Twitter,
+  ShieldCheck,
+  Wallet,
+  CheckCircle2,
 } from 'lucide-react';
 import MediaShowcase from './components/MediaShowcase';
 
@@ -36,6 +39,24 @@ interface Asset {
   owner: UserProfile;
 }
 
+interface VerusSubscriber {
+  verusId: string;
+  createdAt: string;
+}
+
+interface VerusInboxMessage {
+  id: string;
+  recipientVerusId: string;
+  subject: string;
+  body: string;
+  channel: string;
+  createdAt: string;
+  verified: boolean;
+  status: string;
+  signerIdentity?: string;
+  signature?: string;
+}
+
 // Helper function to generate consistent placeholder images
 const getPicsumUrl = (seed: string, width: number, height: number = width) => 
   `https://picsum.photos/${width}/${height}?random=${seed}`;
@@ -57,8 +78,14 @@ const avatarBySeed: Record<string, string> = {
 };
 
 const AVATAR_FALLBACK = 'https://images.unsplash.com/photo-1511367461989-f85a21fda167?auto=format&fit=crop&w=300&q=80';
+const VERUS_SUBSCRIBERS_KEY = 'coming-soon:verus-subscribers';
 
 const getAvatarUrl = (seed: string) => avatarBySeed[seed] ?? AVATAR_FALLBACK;
+const normalizeVerusId = (value: string) => value.trim().replace(/\s+/g, '');
+const isValidVerusId = (value: string) => {
+  const normalized = normalizeVerusId(value);
+  return /^(i[a-zA-Z0-9]{20,}|[A-Za-z0-9._-]+@)$/.test(normalized);
+};
 
 const profiles: Record<string, UserProfile> = {
   katz: {
@@ -311,10 +338,63 @@ export default function App() {
   const [selectedArtist, setSelectedArtist] = useState<UserProfile | null>(null);
   const [activeTab, setActiveTab] = useState<'creations' | 'collection'>('creations');
   const [followedUsers, setFollowedUsers] = useState<Set<string>>(new Set());
-  const [waitlistEmail, setWaitlistEmail] = useState('');
+  const [waitlistVerusId, setWaitlistVerusId] = useState('');
   const [waitlistStatus, setWaitlistStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
+  const [verusSubscribers, setVerusSubscribers] = useState<VerusSubscriber[]>([]);
+  const [broadcastStatus, setBroadcastStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
+  const [inboxVerusId, setInboxVerusId] = useState('');
+  const [inboxChallenge, setInboxChallenge] = useState('');
+  const [inboxRequestUri, setInboxRequestUri] = useState('');
+  const [inboxQrDataUrl, setInboxQrDataUrl] = useState('');
+  const [inboxSignature, setInboxSignature] = useState('');
+  const [inboxMessages, setInboxMessages] = useState<VerusInboxMessage[]>([]);
+  const [inboxStatus, setInboxStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
+  const [inboxNotice, setInboxNotice] = useState('');
   const [showVerusInfo, setShowVerusInfo] = useState(false);
   const verusInfoRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const loadSubscribers = async () => {
+      try {
+        const response = await fetch('/api/verus/subscribers');
+        if (!response.ok) throw new Error('Unable to load Verus subscribers');
+
+        const data = await response.json() as { subscribers?: VerusSubscriber[] };
+        if (Array.isArray(data.subscribers)) {
+          setVerusSubscribers(
+            data.subscribers.filter(item => typeof item?.verusId === 'string' && typeof item?.createdAt === 'string')
+          );
+          return;
+        }
+      } catch {
+        const saved = window.localStorage.getItem(VERUS_SUBSCRIBERS_KEY);
+        if (!saved) return;
+
+        try {
+          const parsed = JSON.parse(saved) as VerusSubscriber[];
+          if (Array.isArray(parsed)) {
+            setVerusSubscribers(
+              parsed.filter(item => typeof item?.verusId === 'string' && typeof item?.createdAt === 'string')
+            );
+          }
+        } catch {
+          window.localStorage.removeItem(VERUS_SUBSCRIBERS_KEY);
+        }
+      }
+    };
+
+    void loadSubscribers();
+  }, []);
+
+  useEffect(() => {
+    window.localStorage.setItem(VERUS_SUBSCRIBERS_KEY, JSON.stringify(verusSubscribers));
+  }, [verusSubscribers]);
+
+  useEffect(() => {
+    if (!inboxVerusId && verusSubscribers.length > 0) {
+      setInboxVerusId(verusSubscribers[0].verusId);
+    }
+  }, [inboxVerusId, verusSubscribers]);
 
   useEffect(() => {
     // Handle Escape key to close modal
@@ -341,6 +421,175 @@ export default function App() {
     }
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [showVerusInfo]);
+
+  const handleVerusSubscribe = async () => {
+    const normalized = normalizeVerusId(waitlistVerusId);
+
+    if (!isValidVerusId(normalized)) {
+      setWaitlistStatus('error');
+      window.setTimeout(() => setWaitlistStatus('idle'), 2000);
+      return;
+    }
+
+    setWaitlistStatus('loading');
+
+    try {
+      const response = await fetch('/api/verus/subscribe', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ verusId: normalized }),
+      });
+
+      const data = await response.json() as {
+        ok?: boolean;
+        subscriber?: VerusSubscriber & { verified?: boolean; identityName?: string | null; verificationError?: string | null; };
+        rpcVerified?: boolean;
+        rpcError?: string | null;
+        error?: string;
+      };
+
+      if (!response.ok || !data.ok || !data.subscriber) {
+        throw new Error(data.error || data.rpcError || 'Unable to save Verus subscriber');
+      }
+
+      setVerusSubscribers(current => {
+        if (current.some(entry => entry.verusId === normalized)) {
+          return current;
+        }
+        return [data.subscriber as VerusSubscriber, ...current];
+      });
+      setWaitlistVerusId('');
+      setWaitlistStatus('success');
+      window.setTimeout(() => setWaitlistStatus('idle'), 3000);
+    } catch {
+      setWaitlistStatus('error');
+      window.setTimeout(() => setWaitlistStatus('idle'), 2500);
+    }
+  };
+
+  const handleVerusBroadcast = async () => {
+    if (verusSubscribers.length === 0) {
+      setBroadcastStatus('error');
+      window.setTimeout(() => setBroadcastStatus('idle'), 2000);
+      return;
+    }
+
+    setBroadcastStatus('loading');
+
+    try {
+      const response = await fetch('/api/verus/broadcast', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          subject: 'Coming Soon launch update',
+          message: 'You are on the Verus subscriber list. Launch updates will arrive through VerusID instead of email.',
+        }),
+      });
+
+      const data = await response.json() as { ok?: boolean; delivered?: number; error?: string };
+      if (!response.ok || !data.ok) {
+        throw new Error(data.error || 'Unable to queue Verus broadcast');
+      }
+
+      setBroadcastStatus('success');
+      window.setTimeout(() => setBroadcastStatus('idle'), 2500);
+    } catch {
+      setBroadcastStatus('error');
+      window.setTimeout(() => setBroadcastStatus('idle'), 2500);
+    }
+  };
+
+  const handleRequestInboxChallenge = async () => {
+    const normalized = normalizeVerusId(inboxVerusId);
+
+    if (!isValidVerusId(normalized)) {
+      setInboxNotice('Enter a valid VerusID or i-address first.');
+      setInboxStatus('error');
+      window.setTimeout(() => setInboxStatus('idle'), 2000);
+      return;
+    }
+
+    setInboxStatus('loading');
+    setInboxNotice('Requesting wallet challenge...');
+
+    try {
+      const response = await fetch(`/api/verus/inbox/challenge?verusId=${encodeURIComponent(normalized)}`);
+      const data = await response.json() as {
+        ok?: boolean;
+        verusId?: string;
+        challenge?: string;
+        requestUri?: string;
+        qrDataUrl?: string;
+        error?: string;
+      };
+
+      if (!response.ok || !data.ok || !data.challenge) {
+        throw new Error(data.error || 'Unable to request unlock challenge');
+      }
+
+      setInboxVerusId(data.verusId || normalized);
+      setInboxChallenge(data.challenge);
+      setInboxRequestUri(data.requestUri || '');
+      setInboxQrDataUrl(data.qrDataUrl || '');
+      setInboxSignature('');
+      setInboxMessages([]);
+      setInboxNotice('Scan the QR in Verus Mobile, then approve the request.');
+      setInboxStatus('success');
+      window.setTimeout(() => setInboxStatus('idle'), 2500);
+    } catch (error) {
+      setInboxNotice(error instanceof Error ? error.message : 'Unable to request unlock challenge.');
+      setInboxStatus('error');
+      window.setTimeout(() => setInboxStatus('idle'), 2500);
+    }
+  };
+
+  const handleUnlockInbox = async () => {
+    const normalized = normalizeVerusId(inboxVerusId);
+
+    if (!isValidVerusId(normalized) || !inboxChallenge || !inboxSignature.trim()) {
+      setInboxNotice('Request a challenge and paste the wallet signature first.');
+      setInboxStatus('error');
+      window.setTimeout(() => setInboxStatus('idle'), 2000);
+      return;
+    }
+
+    setInboxStatus('loading');
+    setInboxNotice('Verifying wallet signature...');
+
+    try {
+      const response = await fetch('/api/verus/inbox/unlock', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          verusId: normalized,
+          challenge: inboxChallenge,
+          signature: inboxSignature.trim(),
+        }),
+      });
+
+      const data = await response.json() as { ok?: boolean; verusId?: string; messages?: VerusInboxMessage[]; error?: string };
+
+      if (!response.ok || !data.ok) {
+        throw new Error(data.error || 'Unable to unlock inbox');
+      }
+
+      setInboxVerusId(data.verusId || normalized);
+      setInboxMessages(Array.isArray(data.messages) ? data.messages : []);
+      setInboxNotice(`Inbox unlocked: ${Array.isArray(data.messages) ? data.messages.length : 0} message(s)`);
+      setInboxStatus('success');
+      window.setTimeout(() => setInboxStatus('idle'), 2500);
+    } catch (error) {
+      setInboxNotice(error instanceof Error ? error.message : 'Unable to unlock inbox.');
+      setInboxStatus('error');
+      window.setTimeout(() => setInboxStatus('idle'), 2500);
+    }
+  };
 
 
   return (
@@ -431,46 +680,34 @@ export default function App() {
 
           {/* Bottom CTA: Waitlist + How It Works */}
           <div className="space-y-5 shrink-0">
-            {/* Waitlist */}
+            {/* Verus subscription */}
             <div>
               <h2 className="text-h2 font-heading tracking-[-0.02em] text-white/80 mb-2">
-                Coming Soon
+                Verus-native alerts
               </h2>
               <p className="text-caption text-white/50 mb-4 font-sans max-w-[240px] leading-relaxed">
-                Join creators getting early access.
+                Get release updates through your VerusID instead of email.
               </p>
               <div className="w-full flex gap-2">
                 <input 
-                  type="email" 
-                  placeholder="Email address"
-                  aria-label="Email for waitlist"
-                  value={waitlistEmail}
-                  onChange={(e) => setWaitlistEmail(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') {
-                      e.currentTarget.nextElementSibling?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-                    }
-                  }}
-                  disabled={waitlistStatus === 'loading'}
-                  className="flex-1 bg-white/[0.04] border border-white/[0.08] rounded-lg px-3 py-2.5 text-caption text-white/70 placeholder:text-white/20 focus:outline-none focus:border-white/20 transition-colors font-sans disabled:opacity-50"
-                />
-                <button 
-                  onClick={() => {
-                    if (waitlistEmail.match(/^[^\s@]+@[^\s@]+\.[^\s@]+$/)) {
-                      setWaitlistStatus('loading');
-                      setTimeout(() => {
-                        setWaitlistStatus('success');
-                        setWaitlistEmail('');
-                        setTimeout(() => setWaitlistStatus('idle'), 3000);
-                      }, 800);
-                    } else {
-                      setWaitlistStatus('error');
-                      setTimeout(() => setWaitlistStatus('idle'), 2000);
-                    }
-                  }}
-                  disabled={waitlistStatus === 'loading'}
-                  className={`px-4 py-2.5 border rounded-lg text-micro uppercase transition-all font-sans flex items-center gap-1.5 ${
-                    waitlistStatus === 'success' 
+                 type="text"
+                 placeholder="VerusID or i-address"
+                 aria-label="VerusID for waitlist"
+                 value={waitlistVerusId}
+                 onChange={(e) => setWaitlistVerusId(e.target.value)}
+                 onKeyDown={(e) => {
+                   if (e.key === 'Enter') {
+                     handleVerusSubscribe();
+                   }
+                 }}
+                 disabled={waitlistStatus === 'loading'}
+                 className="flex-1 bg-white/[0.04] border border-white/[0.08] rounded-lg px-3 py-2.5 text-caption text-white/70 placeholder:text-white/20 focus:outline-none focus:border-white/20 transition-colors font-sans disabled:opacity-50"
+              />
+              <button 
+                 onClick={handleVerusSubscribe}
+                 disabled={waitlistStatus === 'loading'}
+                 className={`px-4 py-2.5 border rounded-lg text-micro uppercase transition-all font-sans flex items-center gap-1.5 ${
+                   waitlistStatus === 'success' 
                       ? 'border-green-500/40 text-green-400'
                       : waitlistStatus === 'error'
                       ? 'border-red-500/40 text-red-400'
@@ -478,8 +715,141 @@ export default function App() {
                   } disabled:opacity-50`}
                 >
                   {waitlistStatus === 'loading' && <Loader2 className="w-3 h-3 animate-spin" />}
-                  {waitlistStatus === 'success' ? 'Joined' : waitlistStatus === 'error' ? 'Invalid' : 'Join'}
+                  {waitlistStatus === 'success' ? 'Saved' : waitlistStatus === 'error' ? 'Invalid' : 'Send'}
                 </button>
+              </div>
+              <div className="mt-3 flex items-center gap-2 text-[11px] text-white/35">
+                <ShieldCheck className="w-3 h-3" />
+                <span>VerusID messages can be signed and delivered through your wallet.</span>
+              </div>
+              <div className="mt-4 space-y-2">
+                <div className="flex items-center gap-2 text-[11px] uppercase tracking-[0.12em] text-white/25">
+                  <Wallet className="w-3 h-3" />
+                  <span>Saved Verus subscribers</span>
+                </div>
+                {verusSubscribers.length > 0 ? (
+                  <div className="space-y-1">
+                    {verusSubscribers.slice(0, 3).map((subscriber) => (
+                      <div key={subscriber.verusId} className="flex items-center justify-between rounded-md border border-white/[0.06] bg-white/[0.02] px-3 py-2">
+                        <span className="text-caption text-white/70 font-sans truncate">{subscriber.verusId}</span>
+                        <CheckCircle2 className="w-3.5 h-3.5 text-green-400 flex-shrink-0" />
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-[11px] text-white/30 font-sans">
+                    Add a VerusID first to enable test alerts.
+                  </p>
+                )}
+              </div>
+              {import.meta.env.DEV && (
+                <button
+                  type="button"
+                  onClick={handleVerusBroadcast}
+                  disabled={broadcastStatus === 'loading' || verusSubscribers.length === 0}
+                  className="mt-2 w-full rounded-lg border border-white/[0.10] bg-white/[0.03] px-3 py-2 text-[11px] uppercase tracking-[0.12em] text-white/70 hover:bg-white hover:text-black transition-colors disabled:opacity-50"
+                >
+                  {broadcastStatus === 'loading'
+                    ? 'Queuing alert...'
+                    : broadcastStatus === 'success'
+                    ? 'Alert queued'
+                    : 'Send Verus test alert'}
+                </button>
+              )}
+              <div className="mt-4 space-y-2">
+                <div className="flex items-center gap-2 text-[11px] uppercase tracking-[0.12em] text-white/25">
+                  <ShieldCheck className="w-3 h-3" />
+                  <span>Inbox viewer</span>
+                </div>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    placeholder="VerusID to unlock"
+                    aria-label="VerusID inbox unlock"
+                    value={inboxVerusId}
+                    onChange={(e) => setInboxVerusId(e.target.value)}
+                    className="flex-1 bg-white/[0.04] border border-white/[0.08] rounded-lg px-3 py-2.5 text-caption text-white/70 placeholder:text-white/20 focus:outline-none focus:border-white/20 transition-colors font-sans"
+                  />
+                  <button
+                    type="button"
+                    onClick={handleRequestInboxChallenge}
+                    disabled={inboxStatus === 'loading'}
+                    className="px-4 py-2.5 border rounded-lg text-micro uppercase transition-all font-sans border-white/[0.15] text-white/80 hover:bg-white hover:text-black hover:border-white disabled:opacity-50"
+                  >
+                    {inboxStatus === 'loading' ? 'Loading' : 'Challenge'}
+                  </button>
+                </div>
+                {inboxNotice && (
+                  <div className={`text-[11px] font-sans leading-relaxed ${inboxStatus === 'error' ? 'text-red-400' : inboxStatus === 'success' ? 'text-green-300' : 'text-white/40'}`}>
+                    {inboxNotice}
+                  </div>
+                )}
+                {inboxQrDataUrl && (
+                  <div className="space-y-3 rounded-lg border border-white/[0.08] bg-white/[0.03] px-3 py-3">
+                    <div className="flex items-center gap-3">
+                      <img
+                        src={inboxQrDataUrl}
+                        alt="Verus wallet challenge QR"
+                        className="h-28 w-28 rounded-xl border border-white/10 bg-white p-2"
+                      />
+                      <div className="space-y-1">
+                        <div className="text-[10px] uppercase tracking-[0.12em] text-white/25">Wallet QR</div>
+                        <div className="text-[11px] text-white/55 font-sans leading-relaxed">
+                          Scan this in Verus Mobile to approve the inbox challenge.
+                        </div>
+                        {inboxRequestUri && (
+                          <div className="text-[10px] text-white/30 font-sans break-all">{inboxRequestUri}</div>
+                        )}
+                      </div>
+                    </div>
+                    <div>
+                      <div className="text-[10px] uppercase tracking-[0.12em] text-white/25">Challenge text</div>
+                      <div className="mt-1 whitespace-pre-wrap break-words text-[11px] text-white/55 font-sans">{inboxChallenge}</div>
+                    </div>
+                    <div>
+                      <div className="text-[10px] uppercase tracking-[0.12em] text-white/25">Fallback signature</div>
+                      <input
+                        type="text"
+                        placeholder="Paste the signed challenge only if QR approval doesn’t callback"
+                        aria-label="Wallet signature fallback"
+                        value={inboxSignature}
+                        onChange={(e) => setInboxSignature(e.target.value)}
+                        className="mt-2 w-full bg-black/30 border border-white/[0.08] rounded-lg px-3 py-2.5 text-caption text-white/70 placeholder:text-white/20 focus:outline-none focus:border-white/20 transition-colors font-sans"
+                      />
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleUnlockInbox}
+                      disabled={inboxStatus === 'loading'}
+                      className="w-full rounded-lg border border-white/[0.15] bg-white px-4 py-2.5 text-micro uppercase tracking-[0.12em] text-black transition-colors hover:bg-white/90 disabled:opacity-50"
+                    >
+                      {inboxStatus === 'loading' ? 'Unlocking' : 'Unlock inbox'}
+                    </button>
+                  </div>
+                )}
+                {inboxMessages.length > 0 ? (
+                  <div className="space-y-2">
+                    {inboxMessages.slice(0, 3).map((message) => (
+                      <div key={message.id} className="rounded-lg border border-white/[0.08] bg-white/[0.03] px-3 py-2">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-caption text-white/80 font-sans truncate">{message.subject}</span>
+                          <span className={`text-[10px] uppercase tracking-[0.12em] ${message.verified ? 'text-green-400' : 'text-white/25'}`}>
+                            {message.status}
+                          </span>
+                        </div>
+                        <p className="mt-1 text-[11px] text-white/45 font-sans leading-relaxed whitespace-pre-wrap">{message.body}</p>
+                        <div className="mt-2 flex items-center justify-between text-[10px] text-white/25">
+                          <span>{message.recipientVerusId}</span>
+                          <span>{new Date(message.createdAt).toLocaleString()}</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-[11px] text-white/30 font-sans">
+                    Request a challenge, sign it in your Verus wallet, and unlock the inbox.
+                  </p>
+                )}
               </div>
             </div>
 
@@ -489,16 +859,16 @@ export default function App() {
             </div>
             <div className="grid grid-cols-3 gap-3 pb-2">
               <div className="p-3 rounded-lg bg-white/[0.02] border border-white/[0.04]">
-                <div className="text-caption font-heading text-white/70 mb-1">Create</div>
-                <div className="text-micro text-white/30 leading-relaxed">Produce content and register it on the Verus blockchain.</div>
+                <div className="text-caption font-heading text-white/70 mb-1">Subscribe</div>
+                <div className="text-micro text-white/30 leading-relaxed">Users save a VerusID instead of an email address.</div>
               </div>
               <div className="p-3 rounded-lg bg-white/[0.02] border border-white/[0.04]">
-                <div className="text-caption font-heading text-white/70 mb-1">Publish</div>
-                <div className="text-micro text-white/30 leading-relaxed">Share with the world — your work is verifiable and permanent.</div>
+                <div className="text-caption font-heading text-white/70 mb-1">Sign</div>
+                <div className="text-micro text-white/30 leading-relaxed">Announcements are signed with VerusID messages or requests.</div>
               </div>
               <div className="p-3 rounded-lg bg-white/[0.02] border border-white/[0.04]">
-                <div className="text-caption font-heading text-white/70 mb-1">Earn</div>
-                <div className="text-micro text-white/30 leading-relaxed">Receive royalties instantly on every resale, forever.</div>
+                <div className="text-caption font-heading text-white/70 mb-1">Deliver</div>
+                <div className="text-micro text-white/30 leading-relaxed">Optional encrypted payloads can be handed to the wallet later.</div>
               </div>
             </div>
           </div>
@@ -650,4 +1020,3 @@ export default function App() {
     </main>
   );
 }
-
