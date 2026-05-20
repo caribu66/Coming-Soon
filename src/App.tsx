@@ -6,21 +6,13 @@
 import { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
-  Music, 
-  Video, 
-  Database, 
   Globe,
-  Zap,
-  Layers,
-  Shield,
-  Headphones,
-  Mic,
   Disc,
-  Volume2,
   X,
   Loader2,
   Twitter,
 } from 'lucide-react';
+import MediaShowcase from './components/MediaShowcase';
 
 interface UserProfile {
   id: string;
@@ -40,7 +32,6 @@ interface Asset {
   val: string;
   type: string;
   src: string;
-  icon: any;
   creator: UserProfile;
   owner: UserProfile;
 }
@@ -49,7 +40,7 @@ interface Asset {
 const getPicsumUrl = (seed: string, width: number, height: number = width) => 
   `https://picsum.photos/${width}/${height}?random=${seed}`;
 
-// Music/artist-focused portrait set for showcase.
+// Creator portrait set for showcase.
 const avatarBySeed: Record<string, string> = {
   katz: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=300&q=80',
   mora: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=300&q=80',
@@ -75,7 +66,7 @@ const profiles: Record<string, UserProfile> = {
     name: 'V. KATZ',
     handle: 'katz@',
     avatar: getAvatarUrl('katz'),
-    bio: 'Modular synthesis expert exploring the intersection of analog warmth and digital precision.',
+    bio: 'Generative artist exploring the intersection of code, color, and visual expression.',
     location: 'Berlin, DE',
     verusId: 'katz.v@'
   },
@@ -84,7 +75,7 @@ const profiles: Record<string, UserProfile> = {
     name: 'E. MORA',
     handle: 'mora@',
     avatar: getAvatarUrl('mora'),
-    bio: 'Sonic architect of spatial environments and industrial soundscapes.',
+    bio: 'Designer of immersive digital spaces and interactive virtual environments.',
     location: 'Tokyo, JP',
     verusId: 'mora.e@'
   },
@@ -93,7 +84,7 @@ const profiles: Record<string, UserProfile> = {
     name: 'L. CHEN',
     handle: 'chen@',
     avatar: getAvatarUrl('chen'),
-    bio: 'Multi-disciplinary artist specializing in generative audiovisual experiences.',
+    bio: 'Writer and visual artist specializing in generative text and interactive narratives.',
     location: 'Seoul, KR',
     verusId: 'chen.l@'
   },
@@ -102,7 +93,7 @@ const profiles: Record<string, UserProfile> = {
     name: 'B. JAX',
     handle: 'jaxx@',
     avatar: getAvatarUrl('jax'),
-    bio: 'Decentralized audio pioneer focused on stem-based collaboration frameworks.',
+    bio: 'Protocol designer building decentralized collaboration frameworks for creators.',
     location: 'London, UK',
     verusId: 'jax.b@'
   },
@@ -111,7 +102,7 @@ const profiles: Record<string, UserProfile> = {
     name: 'S. NOVA',
     handle: 'nova@',
     avatar: getAvatarUrl('nova'),
-    bio: 'Curator of forgotten sounds and magnetic tape artifacts.',
+    bio: 'Curator and essayist exploring the cultural impact of digital preservation.',
     location: 'Paris, FR',
     verusId: 'nova.s@'
   },
@@ -120,7 +111,7 @@ const profiles: Record<string, UserProfile> = {
     name: 'D. REID',
     handle: 'reid@',
     avatar: getAvatarUrl('reid'),
-    bio: 'Vocalist and voice synthesis engineer bridging human and AI expression.',
+    bio: 'Narrative designer bridging human storytelling and AI-mediated expression.',
     location: 'Los Angeles, US',
     verusId: 'reid.d@'
   },
@@ -129,7 +120,7 @@ const profiles: Record<string, UserProfile> = {
     name: 'ALEXIS',
     handle: 'alex@',
     avatar: getAvatarUrl('alex'),
-    bio: 'Signal theorist focused on wave-based communication systems.',
+    bio: 'Systems architect focused on decentralized communication protocols.',
     location: 'Stockholm, SE',
     verusId: 'alex.is@'
   },
@@ -138,7 +129,7 @@ const profiles: Record<string, UserProfile> = {
     name: 'M. ROSS',
     handle: 'ross@',
     avatar: getAvatarUrl('ross'),
-    bio: 'Field recording specialist capturing the acoustic biology of extreme environments.',
+    bio: 'Visual storyteller documenting the intersection of nature and technology.',
     location: 'Reykjavík, IS',
     verusId: 'ross.m@'
   },
@@ -147,7 +138,7 @@ const profiles: Record<string, UserProfile> = {
     name: 'LUNA_T',
     handle: 'luna@',
     avatar: getAvatarUrl('luna'),
-    bio: 'Ambient producer crafting ethereal textures for deep-spatial listening.',
+    bio: 'Experience designer crafting ethereal digital spaces for deep immersion.',
     location: 'Oslo, NO',
     verusId: 'luna.t@'
   },
@@ -165,7 +156,7 @@ const profiles: Record<string, UserProfile> = {
     name: 'D_MODE',
     handle: 'dmode@',
     avatar: getAvatarUrl('dmode'),
-    bio: 'Industrial sound designer focusing on machine-human interface sonification.',
+    bio: 'Interactive installation artist exploring machine-human creative interfaces.',
     location: 'Detroit, US',
     verusId: 'dmode.v@'
   },
@@ -174,7 +165,7 @@ const profiles: Record<string, UserProfile> = {
     name: 'ZERO_G',
     handle: 'zerog@',
     avatar: getAvatarUrl('zerog'),
-    bio: 'Audio-visual explorer utilizing blockchain-verified randomness in composition.',
+    bio: 'Multi-disciplinary creator utilizing blockchain-verified provenance across all works.',
     location: 'Mars Colony 1',
     verusId: 'zerog.node@'
   }
@@ -183,145 +174,133 @@ const profiles: Record<string, UserProfile> = {
 const assets: Asset[] = [
   { 
     id: '01', 
-    title: 'Fragment_01', 
+    title: 'GEN_01', 
     fullName: 'Analog Warmth',
-    description: 'A pure sawtooth wave processed through a vintage ladder filter.',
+    description: 'A generative visual study of analog texture through digital precision.',
     val: '1.2 V', 
     type: 'image', 
     src: getPicsumUrl('asset01', 1000), 
-    icon: Music,
     creator: profiles.katz,
     owner: profiles.katz
   },
   { 
     id: '02', 
-    title: 'Fragment_02', 
+    title: 'VIZ_02', 
     fullName: 'Industrial Pulse',
-    description: 'Rythmic noise generated from deep-sea sonar signals.',
+    description: 'Data visualization generated from deep-sea sensor telemetry.',
     val: '0.8 V', 
     type: 'image', 
     src: getPicsumUrl('asset02', 1000), 
-    icon: Volume2,
     creator: profiles.mora,
     owner: profiles.mora
   },
   { 
     id: '03', 
-    title: 'Fragment_03', 
+    title: 'CORE_03', 
     fullName: 'Ethical Core',
-    description: 'Generative melody based on protocol consensus timestamps.',
+    description: 'Generative artwork based on protocol consensus timestamps.',
     val: '2.5 V', 
     type: 'image', 
     src: getPicsumUrl('asset03', 1000), 
-    icon: Shield,
     creator: profiles.chen,
     owner: profiles.chen
   },
   { 
     id: '04', 
-    title: 'Stem_Archive', 
+    title: 'ARCH_04', 
     fullName: 'Deep Space',
-    description: 'Multi-track stems of the "Deep Space" performance, verified on-chain.',
+    description: 'Multi-layer creative assets of the "Deep Space" project, verified on-chain.',
     val: '4.2 V', 
     type: 'image', 
     src: getPicsumUrl('asset04', 1000), 
-    icon: Headphones,
     creator: profiles.jax,
     owner: profiles.jax
   },
   { 
     id: '05', 
-    title: 'Sonic_DNA', 
+    title: 'URBAN_05', 
     fullName: 'Urban Decay',
-    description: 'Field recordings of the city at 4 AM, granularly processed.',
+    description: 'Photo essay documenting the city at 4 AM, digitally processed.',
     val: '1.8 V', 
     type: 'image', 
     src: getPicsumUrl('asset05', 1000), 
-    icon: Mic,
     creator: profiles.nova,
     owner: profiles.reid
   },
   { 
     id: '06', 
-    title: 'Vocal_Node', 
+    title: 'NODE_06', 
     fullName: 'Human Element',
-    description: 'High-fidelity vocal takes for decentralized remixing.',
+    description: 'High-fidelity creative assets for decentralized collaboration.',
     val: '3.0 V', 
     type: 'image', 
     src: getPicsumUrl('asset06', 1000), 
-    icon: Mic,
     creator: profiles.reid,
     owner: profiles.alex
   },
   { 
     id: '07', 
-    title: 'Freq_Wave', 
+    title: 'WAVE_07', 
     fullName: 'Voltage Control',
-    description: 'Raw control voltage waveforms for modular environment syncing.',
+    description: 'Interactive visual system for real-time collaborative creation.',
     val: '0.9 V', 
     type: 'image', 
     src: getPicsumUrl('asset07', 1000), 
-    icon: Zap,
     creator: profiles.alex,
     owner: profiles.ross
   },
   { 
     id: '08', 
-    title: 'E_String_G', 
+    title: 'TEXT_08', 
     fullName: 'Resonant Wood',
-    description: 'High-definition string recordings with natural acoustic reverb.',
+    description: 'High-definition digital capture of natural organic textures.',
     val: '1.5 V', 
     type: 'image', 
     src: getPicsumUrl('asset08', 1000), 
-    icon: Music,
     creator: profiles.ross,
     owner: profiles.luna
   },
   { 
     id: '09', 
-    title: 'Grand_Ivory', 
+    title: 'PIXEL_09', 
     fullName: 'Pristine Keys',
-    description: 'Sampled piano chords recorded in a cathedral environment.',
+    description: 'Digital composition rendered from spatial environmental data.',
     val: '2.0 V', 
     type: 'image', 
     src: getPicsumUrl('asset09', 1000), 
-    icon: Music,
     creator: profiles.luna,
     owner: profiles.cyber
   },
   { 
     id: '10', 
-    title: 'Visual_FX', 
+    title: 'PRISM_10', 
     fullName: 'Prism Stream',
-    description: 'Generative visual artifacts reactive to sonic input.',
+    description: 'Generative visual artifacts reactive to environmental data.',
     val: '4.5 V', 
     type: 'video', 
-    src: 'https://cdn.pixabay.com/video/2020/05/24/40108-423548943_tiny.mp4', 
-    icon: Video,
+    src: getPicsumUrl('asset10', 1000), 
     creator: profiles.cyber,
     owner: profiles.dmode
   },
   { 
     id: '11', 
-    title: 'Deck_Set', 
+    title: 'PHYS_11', 
     fullName: 'Turntable Physics',
-    description: 'Real-time deck control protocols for digital performance.',
+    description: 'Real-time creative control protocols for digital performance.',
     val: '5.0 V', 
     type: 'video', 
-    src: 'https://cdn.pixabay.com/video/2016/11/04/6257-189679117_tiny.mp4', 
-    icon: Layers,
+    src: getPicsumUrl('asset11', 1000), 
     creator: profiles.dmode,
     owner: profiles.zerog
   },
   { 
     id: '12', 
-    title: 'Sonic_Core', 
+    title: 'HIVE_12', 
     fullName: 'Artifact Hive',
-    description: 'Centralized database of verified media fragments.',
+    description: 'Curated collection of verified creative works across all media.',
     val: '9.9 V', 
     type: 'image', 
     src: getPicsumUrl('asset12', 1000), 
-    icon: Database,
     creator: profiles.zerog,
     owner: profiles.katz
   },
@@ -329,22 +308,13 @@ const assets: Asset[] = [
 
 
 export default function App() {
-  const containerRef = useRef<HTMLDivElement>(null);
-  const shelfRef = useRef<HTMLDivElement>(null);
-  const [dragConstraints, setDragConstraints] = useState({ left: 0, right: 0 });
   const [selectedArtist, setSelectedArtist] = useState<UserProfile | null>(null);
   const [activeTab, setActiveTab] = useState<'creations' | 'collection'>('creations');
   const [followedUsers, setFollowedUsers] = useState<Set<string>>(new Set());
   const [waitlistEmail, setWaitlistEmail] = useState('');
   const [waitlistStatus, setWaitlistStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
-  const isDragging = useRef(false);
-
-
-  // Shuffled data for specific views
-  const [displayAssets] = useState(() => [...assets].sort(() => Math.random() - 0.5));
-  const [trendingNodes] = useState(() => 
-    Object.values(profiles).sort(() => Math.random() - 0.5).slice(0, 5)
-  );
+  const [showVerusInfo, setShowVerusInfo] = useState(false);
+  const verusInfoRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     // Handle Escape key to close modal
@@ -352,30 +322,35 @@ export default function App() {
       if (e.key === 'Escape' && selectedArtist) {
         setSelectedArtist(null);
       }
+      if (e.key === 'Escape' && showVerusInfo) {
+        setShowVerusInfo(false);
+      }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [selectedArtist]);
+  }, [selectedArtist, showVerusInfo]);
 
   useEffect(() => {
-    const updateConstraints = () => {
-      if (shelfRef.current && containerRef.current) {
-        const shelfWidth = shelfRef.current.scrollWidth;
-        const containerWidth = containerRef.current.offsetWidth;
-        setDragConstraints({
-          left: -(shelfWidth - containerWidth),
-          right: 0,
-        });
+    const handleClickOutside = (e: MouseEvent) => {
+      if (verusInfoRef.current && !verusInfoRef.current.contains(e.target as Node)) {
+        setShowVerusInfo(false);
       }
     };
+    if (showVerusInfo) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [showVerusInfo]);
 
-    updateConstraints();
-    window.addEventListener('resize', updateConstraints);
-    return () => window.removeEventListener('resize', updateConstraints);
-  }, []);
 
   return (
-    <div className="h-screen w-screen relative flex flex-col items-center justify-between p-8 md:p-16 overflow-hidden bg-black font-sans select-none">
+    <main className="min-h-screen w-screen relative bg-black font-sans">
+      {/* Ambient gradient orb */}
+      <div className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] md:w-[800px] md:h-[800px] rounded-full pointer-events-none opacity-20 animate-ambient-float"
+           style={{
+             background: 'radial-gradient(circle at center, rgba(255,255,255,0.06) 0%, transparent 70%)',
+           }} />
+
       {/* Subtle Noise Texture Overlay */}
       <div className="fixed inset-0 z-[100] pointer-events-none opacity-[0.015] mix-blend-overlay" 
            style={{ backgroundImage: "url('https://grainy-gradients.vercel.app/noise.svg')" }} />
@@ -384,214 +359,165 @@ export default function App() {
       <div className="fixed inset-0 pointer-events-none opacity-[0.05]" 
            style={{ backgroundImage: 'linear-gradient(to right, #ffffff05 1px, transparent 1px), linear-gradient(to bottom, #ffffff05 1px, transparent 1px)', backgroundSize: '60px 60px' }} />
 
-      {/* Header: Minimal Status */}
-      <div className="w-full flex justify-between items-center shrink-0 z-[60]">
-        <div />
-        <div className="flex items-center gap-2 label-mini opacity-60">
-          <span className="relative flex h-1.5 w-1.5">
-            <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-green-500"></span>
-          </span>
-          <span className="text-white/70">Network_Live</span>
-        </div>
-      </div>
+      <div className="flex flex-col lg:flex-row min-h-screen">
 
-      {/* Main Content Area */}
-      <div className="relative z-10 w-full flex-1 flex flex-col items-center justify-center gap-10 overflow-hidden max-w-7xl mx-auto px-4">
-        
-        {/* Top Centered Section: Trending Nodes */}
-        <motion.div 
-          initial={{ opacity: 0, y: -20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.8 }}
-          className="flex flex-col gap-6 items-center shrink-0 w-full mt-4"
-        >
-          <span className="text-[10px] font-mono uppercase tracking-[0.4em] text-white/30">Trending Protocol Nodes</span>
-          <div className="flex items-center gap-6 md:gap-10">
-            {trendingNodes.map((profile) => (
-              <motion.div 
-                key={profile.id}
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-                onClick={() => setSelectedArtist(profile)}
-                className="relative cursor-pointer group flex flex-col items-center gap-3"
-              >
-                <img 
-                  src={profile.avatar} 
-                  className="w-20 h-20 md:w-24 md:h-24 rounded-full border border-white/5 grayscale group-hover:grayscale-0 object-cover transition-all duration-700" 
-                  alt={profile.name} 
-                  loading="lazy"
-                  onError={e => (e.currentTarget.src = AVATAR_FALLBACK)}
-                />
-                <div className="text-[10px] text-white/40 group-hover:text-white transition-colors font-mono uppercase tracking-[0.2em]">
-                  {profile.name}
-                </div>
-              </motion.div>
-            ))}
+        {/* LEFT PANEL: Sticky Hero */}
+        <div className="relative z-10 w-full lg:w-[38%] lg:sticky lg:top-0 lg:h-screen flex flex-col p-6 lg:p-10">
+          {/* Header: Minimal Status */}
+          <div className="w-full shrink-0">
+            <div className="flex items-center gap-2 label-mini opacity-60">
+              <span className="relative flex h-1.5 w-1.5">
+                <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-green-500"></span>
+              </span>
+              <span className="text-white/50 font-light">Network_Live</span>
+            </div>
           </div>
-        </motion.div>
 
-        <div className="w-full h-px bg-white/5 max-w-4xl" />
+          {/* Headline + Features */}
+          <div className="flex-1 flex flex-col justify-center gap-10 lg:gap-16 py-8 lg:py-0">
+            <h1 className="text-[clamp(2.7rem,5.4vw,4.05rem)] font-heading uppercase leading-[0.9] tracking-tight text-white">
+              Unleash your imagination,<br />
+              <span className="text-white/60 block mt-2">Own forever.</span>
+            </h1>
 
-        <div className="w-full flex-1 flex flex-col md:flex-row items-center justify-center gap-8 lg:gap-24 overflow-visible">
-          {/* Left Column: Brand + Hero */}
-          <div className="flex-1 flex flex-col items-center md:items-start text-center md:text-left justify-center gap-10">
-            <motion.div 
-              initial={{ opacity: 0, y: 30 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 1.2, ease: [0.16, 1, 0.3, 1] }}
-              className="space-y-6"
-            >
-              <h1 className="text-[clamp(3rem,6vw,5.5rem)] font-heading italic uppercase leading-[0.85] tracking-tight shrink-0 text-white font-black mb-8">
-                Own the <br />
-                <span className="text-white/60">Fragment</span>
-              </h1>
-
-              {/* Injected Waitlist Component */}
-              <div className="relative p-6 flex flex-col items-center md:items-start text-center md:text-left group bg-white/[0.02] backdrop-blur-sm rounded-2xl border border-white/[0.03] max-w-sm ml-[-4px]">
-                <div className="relative z-10 flex flex-col items-center md:items-start w-full">
-                  <div className="flex items-center gap-2 mb-4 opacity-50 group-hover:opacity-80 transition-opacity">
-                    <div className="w-1 h-1 rounded-full bg-green-400 animate-pulse" />
-                    <span className="text-[9px] font-mono uppercase tracking-[0.4em] text-white">Sequence_01_Init</span>
-                  </div>
-                  
-                  <h2 className="text-xl font-heading italic uppercase tracking-[0.2em] text-white/70 group-hover:text-white transition-colors duration-1000 mb-2">
-                    Coming Soon
-                  </h2>
-
-                  <p className="text-[10px] text-white/50 mb-6 font-mono max-w-[240px] leading-relaxed">
-                    Join the protocol waitlist for early access to fragment minting.
-                  </p>
-                  
-                  {/* Waitlist Input */}
-                  <div className="w-full flex gap-2">
-                    <input 
-                      type="email" 
-                      placeholder="Join waitlist"
-                      aria-label="Email for waitlist"
-                      value={waitlistEmail}
-                      onChange={(e) => setWaitlistEmail(e.target.value)}
-                      onKeyPress={(e) => {
-                        if (e.key === 'Enter') {
-                          const btn = e.currentTarget.nextElementSibling as HTMLButtonElement;
-                          btn?.click();
-                        }
-                      }}
-                      disabled={waitlistStatus === 'loading'}
-                      className="flex-1 bg-white/[0.05] border border-white/10 rounded-md px-3 py-2 text-[10px] text-white/70 placeholder:text-white/30 focus:outline-none focus:border-white/30 transition-colors font-mono disabled:opacity-50 disabled:cursor-not-allowed"
-                    />
+            {/* Feature bullets */}
+            <div className="space-y-2.5 max-w-xs">
+              <div className="flex items-start gap-3">
+                <div className="w-1 h-1 rounded-full bg-white/20 mt-1.5 flex-shrink-0" />
+                <p className="text-caption text-white/50 font-sans leading-relaxed">Creators publish content on-chain and earn royalties instantly, forever.</p>
+              </div>
+              <div className="flex items-start gap-3">
+                <div className="w-1 h-1 rounded-full bg-white/20 mt-1.5 flex-shrink-0" />
+                <p className="text-caption text-white/50 font-sans leading-relaxed">Audiences discover and collect verified digital works of any kind.</p>
+              </div>
+              <div className="flex items-start gap-3">
+                <div className="w-1 h-1 rounded-full bg-white/20 mt-1.5 flex-shrink-0" />
+                <p className="text-caption text-white/50 font-sans leading-relaxed">
+                  Built on&nbsp;
+                  <span className="relative inline-flex items-center">
                     <button 
-                      onClick={() => {
-                        if (waitlistEmail.match(/^[^\s@]+@[^\s@]+\.[^\s@]+$/)) {
-                          setWaitlistStatus('loading');
-                          setTimeout(() => {
-                            setWaitlistStatus('success');
-                            setWaitlistEmail('');
-                            setTimeout(() => setWaitlistStatus('idle'), 3000);
-                          }, 800);
-                        } else {
-                          setWaitlistStatus('error');
-                          setTimeout(() => setWaitlistStatus('idle'), 2000);
-                        }
-                      }}
-                      disabled={waitlistStatus === 'loading'}
-                      className={`px-4 py-2 border rounded-md text-[9px] uppercase tracking-wider transition-all font-mono flex items-center gap-2 ${
-                        waitlistStatus === 'success' 
-                          ? 'border-green-500/50 text-green-400 bg-green-500/10'
-                          : waitlistStatus === 'error'
-                          ? 'border-red-500/50 text-red-400 bg-red-500/10'
-                          : 'bg-white/10 hover:bg-white/20 border-white/20 text-white/70 hover:text-white'
-                      } disabled:opacity-50 disabled:cursor-not-allowed`}
+                      onClick={(e) => { e.stopPropagation(); setShowVerusInfo(!showVerusInfo); }}
+                      className="text-white/70 hover:text-white transition-colors underline underline-offset-2 decoration-white/20 decoration-dotted cursor-pointer"
                     >
-                      {waitlistStatus === 'loading' && <Loader2 className="w-3 h-3 animate-spin" />}
-                      {waitlistStatus === 'success' ? 'Joined!' : waitlistStatus === 'error' ? 'Invalid Email' : 'Join'}
+                      Verus
                     </button>
-                  </div>
-                </div>
-              </div>
-
-              <div className="max-w-xs md:max-w-sm space-y-6">
-                <p className="text-[15px] text-white/70 font-light leading-relaxed italic">
-                  Decentralized modular media ownership. High-fidelity audio artifacts secured via Verus technology.
+                    <button
+                      onClick={(e) => { e.stopPropagation(); setShowVerusInfo(!showVerusInfo); }}
+                      className="ml-0.5 text-white/30 hover:text-white/60 transition-colors text-[10px] leading-none cursor-pointer"
+                      aria-label="What is Verus?"
+                    >ⓘ</button>
+                    <AnimatePresence>
+                      {showVerusInfo && (
+                        <motion.div 
+                          ref={verusInfoRef}
+                          initial={{ opacity: 0, x: -4 }}
+                          animate={{ opacity: 1, x: 0 }}
+                          exit={{ opacity: 0, x: -4 }}
+                          transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
+                          className="absolute left-full ml-2 top-1/2 -translate-y-1/2 w-64 p-3 bg-neutral-900 border border-white/10 rounded-xl shadow-2xl z-50"
+                        >
+                          <p className="text-caption text-white/70 font-sans leading-relaxed">
+                            A blockchain protocol for identities, payments, and fair consensus — no mining fees, instant settlements. For VerusStream, this means automatic royalty payouts and verifiable content ownership.
+                          </p>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  </span>
+                  &nbsp;— decentralized, secure, and fair.
                 </p>
-                <div className="flex items-center gap-4 opacity-50">
-                  <div className="w-6 h-px bg-white/40" />
-                  <span className="text-[9px] font-mono uppercase tracking-[0.4em] text-white/80">Infinitely Scalable</span>
-                </div>
               </div>
-            </motion.div>
+            </div>
           </div>
 
-          {/* Right Column: Interaction shelf */}
-          <div className="flex-1 w-full max-w-lg flex flex-col gap-6 justify-center min-h-0 overflow-hidden">
-            {/* Integrated Marketplace Shelf */}
-            <div className="flex-1 min-h-0 overflow-visible relative flex items-center" ref={containerRef}>
-              <motion.div 
-                ref={shelfRef}
-                drag="x"
-                onDragStart={() => {
-                  isDragging.current = true;
-                }}
-                onDragEnd={() => {
-                  setTimeout(() => {
-                    isDragging.current = false;
-                  }, 100);
-                }}
-                dragConstraints={dragConstraints}
-                initial={{ opacity: 0, x: 50 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ delay: 0.6, duration: 1.2, ease: [0.16, 1, 0.3, 1] }}
-                className="flex gap-12 cursor-grab active:cursor-grabbing py-12 items-center"
-              >
-                {displayAssets.map((asset) => (
-                  <div 
-                    key={asset.id} 
-                    className="flex-none w-56 group cursor-pointer"
-                    onClick={() => {
-                      if (!isDragging.current) {
-                        setSelectedArtist(asset.creator);
-                      }
-                    }}
-                  >
-                    <div className="relative aspect-square rounded-2xl overflow-hidden mb-6 shadow-2xl transition-all duration-700 group-hover:scale-[1.03] group-hover:shadow-white/[0.05]">
-                      {/* Type badge */}
-                      <div className="absolute top-3 right-3 px-2 py-1 bg-black/70 backdrop-blur-sm rounded-md text-[8px] uppercase tracking-wider text-white/70 font-mono z-10">
-                        {asset.type}
-                      </div>
+          {/* Bottom CTA: Waitlist + How It Works */}
+          <div className="space-y-5 shrink-0">
+            {/* Waitlist */}
+            <div>
+              <h2 className="text-h2 font-heading tracking-[-0.02em] text-white/80 mb-2">
+                Coming Soon
+              </h2>
+              <p className="text-caption text-white/50 mb-4 font-sans max-w-[240px] leading-relaxed">
+                Join creators getting early access.
+              </p>
+              <div className="w-full flex gap-2">
+                <input 
+                  type="email" 
+                  placeholder="Email address"
+                  aria-label="Email for waitlist"
+                  value={waitlistEmail}
+                  onChange={(e) => setWaitlistEmail(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.currentTarget.nextElementSibling?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+                    }
+                  }}
+                  disabled={waitlistStatus === 'loading'}
+                  className="flex-1 bg-white/[0.04] border border-white/[0.08] rounded-lg px-3 py-2.5 text-caption text-white/70 placeholder:text-white/20 focus:outline-none focus:border-white/20 transition-colors font-sans disabled:opacity-50"
+                />
+                <button 
+                  onClick={() => {
+                    if (waitlistEmail.match(/^[^\s@]+@[^\s@]+\.[^\s@]+$/)) {
+                      setWaitlistStatus('loading');
+                      setTimeout(() => {
+                        setWaitlistStatus('success');
+                        setWaitlistEmail('');
+                        setTimeout(() => setWaitlistStatus('idle'), 3000);
+                      }, 800);
+                    } else {
+                      setWaitlistStatus('error');
+                      setTimeout(() => setWaitlistStatus('idle'), 2000);
+                    }
+                  }}
+                  disabled={waitlistStatus === 'loading'}
+                  className={`px-4 py-2.5 border rounded-lg text-micro uppercase transition-all font-sans flex items-center gap-1.5 ${
+                    waitlistStatus === 'success' 
+                      ? 'border-green-500/40 text-green-400'
+                      : waitlistStatus === 'error'
+                      ? 'border-red-500/40 text-red-400'
+                      : 'border-white/[0.15] text-white/80 hover:bg-white hover:text-black hover:border-white'
+                  } disabled:opacity-50`}
+                >
+                  {waitlistStatus === 'loading' && <Loader2 className="w-3 h-3 animate-spin" />}
+                  {waitlistStatus === 'success' ? 'Joined' : waitlistStatus === 'error' ? 'Invalid' : 'Join'}
+                </button>
+              </div>
+            </div>
 
-                      {asset.type === 'video' ? (
-                        <video src={asset.src} autoPlay loop muted playsInline className="w-full h-full object-cover" />
-                      ) : (
-                        <img src={asset.src} alt={asset.title} className="w-full h-full object-cover" loading="lazy" />
-                      )}
-                      
-                    </div>
+            {/* How It Works */}
+            <div className="flex items-center gap-2 mb-3">
+              <span className="text-micro font-heading uppercase tracking-[0.15em] text-white/20">How It Works</span>
+            </div>
+            <div className="grid grid-cols-3 gap-3 pb-2">
+              <div className="p-3 rounded-lg bg-white/[0.02] border border-white/[0.04]">
+                <div className="text-caption font-heading text-white/70 mb-1">Create</div>
+                <div className="text-micro text-white/30 leading-relaxed">Produce content and register it on the Verus blockchain.</div>
+              </div>
+              <div className="p-3 rounded-lg bg-white/[0.02] border border-white/[0.04]">
+                <div className="text-caption font-heading text-white/70 mb-1">Publish</div>
+                <div className="text-micro text-white/30 leading-relaxed">Share with the world — your work is verifiable and permanent.</div>
+              </div>
+              <div className="p-3 rounded-lg bg-white/[0.02] border border-white/[0.04]">
+                <div className="text-caption font-heading text-white/70 mb-1">Earn</div>
+                <div className="text-micro text-white/30 leading-relaxed">Receive royalties instantly on every resale, forever.</div>
+              </div>
+            </div>
+          </div>
+        </div>
 
-                    <div className="space-y-2 px-1">
-                      <h3 className="text-[14px] font-bold text-white/90 truncate group-hover:text-white transition-colors uppercase tracking-tight">
-                        {asset.fullName}
-                      </h3>
-                      <div className="text-[10px] text-white/50 uppercase tracking-[0.2em] flex items-center gap-2 font-mono">
-                         <img 
-                           src={asset.creator.avatar}
-                           alt={asset.creator.verusId}
-                           className="w-4 h-4 rounded-full object-cover flex-shrink-0"
-                           loading="lazy"
-                           onError={e => (e.currentTarget.src = AVATAR_FALLBACK)}
-                         />
-                         <span className="text-white/70">{asset.creator.verusId}</span>
-                         <span className="w-1 h-1 rounded-full bg-white/10" />
-                         <span className="italic">Protocol v1.2</span>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </motion.div>
+        {/* RIGHT PANEL: Scrollable Showcase */}
+        <div className="relative z-10 w-full lg:w-[62%]">
+          <MediaShowcase />
+          {/* Footer */}
+          <div className="px-6 lg:px-10 pb-8 pt-4 border-t border-white/[0.04] mt-8 flex items-center justify-between text-micro text-white/30">
+            <span>Powered by Verus Blockchain</span>
+            <div className="flex items-center gap-4">
+              <a href="#" className="hover:text-white/60 transition-colors">Twitter</a>
+              <a href="#" className="hover:text-white/60 transition-colors">Discord</a>
+              <a href="#" className="hover:text-white/60 transition-colors">Docs</a>
             </div>
           </div>
         </div>
       </div>
-
-      {/* User Profile Modal */}
       <AnimatePresence>
         {selectedArtist && (
           <motion.div 
@@ -634,11 +560,11 @@ export default function App() {
                   />
                 </div>
 
-                <h2 id="modal-title" className="text-2xl font-heading italic uppercase text-white mb-2 tracking-tight">
+                <h2 id="modal-title" className="text-h2 font-heading uppercase text-white mb-2">
                   {selectedArtist.name}
                 </h2>
                 <div className="flex flex-col items-center gap-4 mb-8">
-                  <span className="text-[10px] font-mono text-white/40 uppercase tracking-[0.25em] bg-white/[0.03] px-3 py-1 rounded-full border border-white/5">
+                  <span className="text-caption font-heading uppercase tracking-[0.1em] text-white/40 bg-white/[0.03] px-3 py-1 rounded-full border border-white/5">
                     {selectedArtist.verusId}
                   </span>
                   
@@ -652,31 +578,31 @@ export default function App() {
                       }
                       setFollowedUsers(newFollowed);
                     }}
-                    className={`text-[9px] uppercase tracking-[0.3em] font-bold py-2 px-6 rounded-md border transition-all duration-500 ${
+                    className={`text-micro font-heading uppercase tracking-[0.1em] py-2 px-6 rounded-md border transition-all duration-500 ${
                       followedUsers.has(selectedArtist.id) 
                         ? 'border-white/10 text-white/40 hover:text-white/60' 
                         : 'border-white/40 text-white hover:bg-white hover:text-black'
                     }`}
                   >
-                    {followedUsers.has(selectedArtist.id) ? 'Following' : 'Follow Artist'}
+                    {followedUsers.has(selectedArtist.id) ? 'Following' : 'Follow Creator'}
                   </button>
                 </div>
 
-                <p className="text-[14px] text-white/70 font-light text-center max-w-sm mb-12 leading-relaxed italic">
+                <p className="text-body text-white/70 font-light text-center max-w-sm mb-12 leading-relaxed italic">
                   "{selectedArtist.bio}"
                 </p>
 
                 <div className="flex items-center gap-8 mb-10 w-full justify-center border-b border-white/[0.02]">
                   <button 
                     onClick={() => setActiveTab('creations')}
-                    className={`pb-4 text-[10px] uppercase tracking-[0.3em] transition-all relative font-bold ${activeTab === 'creations' ? 'text-white' : 'text-white/20'}`}
+                    className={`pb-4 text-caption font-heading uppercase tracking-[0.1em] transition-all relative ${activeTab === 'creations' ? 'text-white' : 'text-white/20'}`}
                   >
                     Creations
                     {activeTab === 'creations' && <motion.div layoutId="tab" className="absolute bottom-[-1px] inset-x-0 h-[2px] bg-white/60" />}
                   </button>
                   <button 
                     onClick={() => setActiveTab('collection')}
-                    className={`pb-4 text-[10px] uppercase tracking-[0.3em] transition-all relative font-bold ${activeTab === 'collection' ? 'text-white' : 'text-white/20'}`}
+                    className={`pb-4 text-caption font-heading uppercase tracking-[0.1em] transition-all relative ${activeTab === 'collection' ? 'text-white' : 'text-white/20'}`}
                   >
                     Collection
                     {activeTab === 'collection' && <motion.div layoutId="tab" className="absolute bottom-[-1px] inset-x-0 h-[2px] bg-white/60" />}
@@ -684,7 +610,7 @@ export default function App() {
                 </div>
 
                 {/* Simplified Grid View */}
-                <div className="w-full h-64 overflow-y-auto pr-1 custom-scrollbar overflow-x-hidden">
+                <div className="w-full h-72 overflow-y-auto pr-1 custom-scrollbar overflow-x-hidden">
                   <AnimatePresence mode="wait">
                     <motion.div 
                       key={activeTab}
@@ -706,7 +632,7 @@ export default function App() {
                   </AnimatePresence>
                 </div>
 
-                <div className="mt-10 pt-8 border-t border-white/5 w-full flex justify-between items-center text-[10px] text-white/40 uppercase tracking-widest font-mono">
+                <div className="mt-10 pt-8 border-t border-white/5 w-full flex justify-between items-center text-caption font-sans uppercase tracking-[0.08em] text-white/40">
                   <div className="flex items-center gap-2">
                     <Globe className="w-3.5 h-3.5 opacity-40 text-white" />
                     <span>{selectedArtist.location}</span>
@@ -721,7 +647,7 @@ export default function App() {
           </motion.div>
         )}
       </AnimatePresence>
-    </div>
+    </main>
   );
 }
 

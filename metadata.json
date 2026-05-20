@@ -1,6 +1,6 @@
 {
   "name": "VerusStream",
-  "description": "A decentralized music and video streaming platform powered by VerusCoin and VerusIDs, featuring direct-to-fan sales and automated royalties.",
+  "description": "A decentralized content platform for creators, powered by VerusCoin and VerusIDs, featuring direct-to-audience sales and automated royalties.",
   "requestFramePermissions": [],
   "majorCapabilities": []
 }
