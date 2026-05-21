@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   Globe,
@@ -14,8 +14,14 @@ import {
   ShieldCheck,
   Wallet,
   CheckCircle2,
+  ArrowLeft,
+  Search,
+  ChevronLeft,
+  ChevronRight,
+  Copy,
 } from 'lucide-react';
 import MediaShowcase from './components/MediaShowcase';
+import InboxView from './components/InboxView';
 
 interface UserProfile {
   id: string;
@@ -350,7 +356,17 @@ export default function App() {
   const [inboxMessages, setInboxMessages] = useState<VerusInboxMessage[]>([]);
   const [inboxStatus, setInboxStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
   const [inboxNotice, setInboxNotice] = useState('');
+  const [inboxUnlocked, setInboxUnlocked] = useState(false);
+  const [expandedSignatures, setExpandedSignatures] = useState<Set<string>>(new Set());
+  const [view, setView] = useState<'main' | 'inbox'>('main');
+  const [selectedMessageId, setSelectedMessageId] = useState<string | null>(null);
+  const [readMessageIds, setReadMessageIds] = useState<Set<string>>(new Set());
+  const [inboxSearchQuery, setInboxSearchQuery] = useState('');
+  const [inboxFilter, setInboxFilter] = useState<'all' | 'verified' | 'unverified'>('all');
+  const [inboxPage, setInboxPage] = useState(1);
+  const [showQrModal, setShowQrModal] = useState(false);
   const [showVerusInfo, setShowVerusInfo] = useState(false);
+  const MESSAGES_PER_PAGE = 20;
   const verusInfoRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -389,12 +405,6 @@ export default function App() {
   useEffect(() => {
     window.localStorage.setItem(VERUS_SUBSCRIBERS_KEY, JSON.stringify(verusSubscribers));
   }, [verusSubscribers]);
-
-  useEffect(() => {
-    if (!inboxVerusId && verusSubscribers.length > 0) {
-      setInboxVerusId(verusSubscribers[0].verusId);
-    }
-  }, [inboxVerusId, verusSubscribers]);
 
   useEffect(() => {
     // Handle Escape key to close modal
@@ -503,6 +513,67 @@ export default function App() {
     }
   };
 
+  useEffect(() => {
+    if (!inboxQrDataUrl) return;
+
+    const normalized = normalizeVerusId(inboxVerusId);
+    if (!isValidVerusId(normalized)) return;
+
+    let cancelled = false;
+
+    const poll = async () => {
+      while (!cancelled) {
+        try {
+          const response = await fetch(`/api/verus/inbox/poll?verusId=${encodeURIComponent(normalized)}`);
+          const data = await response.json() as { ok?: boolean; unlocked?: boolean; messages?: VerusInboxMessage[] };
+          if (data.unlocked) {
+            setInboxMessages(data.messages || []);
+            setInboxUnlocked(true);
+            setInboxNotice(`Inbox unlocked: ${(data.messages || []).length} message(s)`);
+            setInboxStatus('success');
+            return;
+          }
+        } catch {
+          // ignore
+        }
+        await new Promise((resolve) => setTimeout(resolve, 2000));
+      }
+    };
+
+    poll();
+
+    return () => { cancelled = true; };
+  }, [inboxQrDataUrl, inboxVerusId]);
+
+  useEffect(() => {
+    if (inboxUnlocked) {
+      setView('inbox');
+      setShowQrModal(false);
+    }
+  }, [inboxUnlocked]);
+
+  useEffect(() => {
+    if (!inboxVerusId) return;
+    const key = `verus-inbox-read-${normalizeVerusId(inboxVerusId)}`;
+    try {
+      const saved = window.localStorage.getItem(key);
+      if (saved) {
+        const parsed = JSON.parse(saved) as string[];
+        if (Array.isArray(parsed)) setReadMessageIds(new Set(parsed));
+      }
+    } catch {}
+  }, [inboxVerusId]);
+
+  useEffect(() => {
+    if (!inboxVerusId) return;
+    try {
+      window.localStorage.setItem(
+        `verus-inbox-read-${normalizeVerusId(inboxVerusId)}`,
+        JSON.stringify([...readMessageIds])
+      );
+    } catch {}
+  }, [readMessageIds, inboxVerusId]);
+
   const handleRequestInboxChallenge = async () => {
     const normalized = normalizeVerusId(inboxVerusId);
 
@@ -517,28 +588,35 @@ export default function App() {
     setInboxNotice('Requesting wallet challenge...');
 
     try {
-      const response = await fetch(`/api/verus/inbox/challenge?verusId=${encodeURIComponent(normalized)}`);
+      const response = await fetch('/api/verus/inbox/decrypt-request', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ verusId: normalized }),
+      });
       const data = await response.json() as {
         ok?: boolean;
         verusId?: string;
-        challenge?: string;
         requestUri?: string;
         qrDataUrl?: string;
+        requestID?: string;
         error?: string;
       };
 
-      if (!response.ok || !data.ok || !data.challenge) {
+      if (!response.ok || !data.ok || !data.requestUri) {
         throw new Error(data.error || 'Unable to request unlock challenge');
       }
 
       setInboxVerusId(data.verusId || normalized);
-      setInboxChallenge(data.challenge);
+      setInboxChallenge(data.requestID || '');
       setInboxRequestUri(data.requestUri || '');
       setInboxQrDataUrl(data.qrDataUrl || '');
       setInboxSignature('');
       setInboxMessages([]);
       setInboxNotice('Scan the QR in Verus Mobile, then approve the request.');
       setInboxStatus('success');
+      setShowQrModal(true);
       window.setTimeout(() => setInboxStatus('idle'), 2500);
     } catch (error) {
       setInboxNotice(error instanceof Error ? error.message : 'Unable to request unlock challenge.');
@@ -550,40 +628,25 @@ export default function App() {
   const handleUnlockInbox = async () => {
     const normalized = normalizeVerusId(inboxVerusId);
 
-    if (!isValidVerusId(normalized) || !inboxChallenge || !inboxSignature.trim()) {
-      setInboxNotice('Request a challenge and paste the wallet signature first.');
-      setInboxStatus('error');
-      window.setTimeout(() => setInboxStatus('idle'), 2000);
-      return;
-    }
-
-    setInboxStatus('loading');
-    setInboxNotice('Verifying wallet signature...');
-
     try {
-      const response = await fetch('/api/verus/inbox/unlock', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          verusId: normalized,
-          challenge: inboxChallenge,
-          signature: inboxSignature.trim(),
-        }),
-      });
-
-      const data = await response.json() as { ok?: boolean; verusId?: string; messages?: VerusInboxMessage[]; error?: string };
+      const response = await fetch(`/api/verus/inbox/poll?verusId=${encodeURIComponent(normalized)}`);
+      const data = await response.json() as { ok?: boolean; unlocked?: boolean; messages?: VerusInboxMessage[]; error?: string };
 
       if (!response.ok || !data.ok) {
         throw new Error(data.error || 'Unable to unlock inbox');
       }
 
-      setInboxVerusId(data.verusId || normalized);
-      setInboxMessages(Array.isArray(data.messages) ? data.messages : []);
-      setInboxNotice(`Inbox unlocked: ${Array.isArray(data.messages) ? data.messages.length : 0} message(s)`);
-      setInboxStatus('success');
-      window.setTimeout(() => setInboxStatus('idle'), 2500);
+      if (data.unlocked) {
+        setInboxVerusId(normalized);
+        setInboxMessages(Array.isArray(data.messages) ? data.messages : []);
+        setInboxUnlocked(true);
+        setInboxNotice(`Inbox unlocked: ${Array.isArray(data.messages) ? data.messages.length : 0} message(s)`);
+        setInboxStatus('success');
+        return;
+      }
+
+      setInboxNotice('Wallet approval still pending. Keep the modal open and approve the request in Verus Mobile.');
+      setInboxStatus('idle');
     } catch (error) {
       setInboxNotice(error instanceof Error ? error.message : 'Unable to unlock inbox.');
       setInboxStatus('error');
@@ -591,6 +654,57 @@ export default function App() {
     }
   };
 
+  const handleLockInbox = () => {
+    void fetch(`/api/verus/inbox/lock?verusId=${encodeURIComponent(normalizeVerusId(inboxVerusId))}`);
+    setInboxVerusId('');
+    setInboxChallenge('');
+    setInboxRequestUri('');
+    setInboxQrDataUrl('');
+    setInboxSignature('');
+    setInboxMessages([]);
+    setInboxNotice('');
+    setInboxStatus('idle');
+    setInboxUnlocked(false);
+    setExpandedSignatures(new Set());
+  };
+
+  const toggleSignature = (id: string) => {
+    setExpandedSignatures((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const formatRelativeTime = (iso: string) => {
+    const diff = Date.now() - new Date(iso).getTime();
+    const mins = Math.floor(diff / 60000);
+    if (mins < 1) return 'just now';
+    if (mins < 60) return `${mins}m ago`;
+    const hours = Math.floor(mins / 60);
+    if (hours < 24) return `${hours}h ago`;
+    const days = Math.floor(hours / 24);
+    if (days < 30) return `${days}d ago`;
+    return new Date(iso).toLocaleDateString();
+  };
+
+  const filteredMessages = useMemo(() => {
+    let msgs = inboxMessages;
+    if (inboxFilter === 'verified') msgs = msgs.filter(m => m.verified);
+    if (inboxFilter === 'unverified') msgs = msgs.filter(m => !m.verified);
+    if (inboxSearchQuery) {
+      const q = inboxSearchQuery.toLowerCase();
+      msgs = msgs.filter(m => m.subject.toLowerCase().includes(q) || m.body.toLowerCase().includes(q));
+    }
+    return msgs;
+  }, [inboxMessages, inboxFilter, inboxSearchQuery]);
+
+  const totalPages = Math.ceil(filteredMessages.length / MESSAGES_PER_PAGE);
+  const paginatedMessages = useMemo(
+    () => filteredMessages.slice((inboxPage - 1) * MESSAGES_PER_PAGE, inboxPage * MESSAGES_PER_PAGE),
+    [filteredMessages, inboxPage]
+  );
 
   return (
     <main className="min-h-screen w-screen relative bg-black font-sans">
@@ -742,20 +856,6 @@ export default function App() {
                   </p>
                 )}
               </div>
-              {import.meta.env.DEV && (
-                <button
-                  type="button"
-                  onClick={handleVerusBroadcast}
-                  disabled={broadcastStatus === 'loading' || verusSubscribers.length === 0}
-                  className="mt-2 w-full rounded-lg border border-white/[0.10] bg-white/[0.03] px-3 py-2 text-[11px] uppercase tracking-[0.12em] text-white/70 hover:bg-white hover:text-black transition-colors disabled:opacity-50"
-                >
-                  {broadcastStatus === 'loading'
-                    ? 'Queuing alert...'
-                    : broadcastStatus === 'success'
-                    ? 'Alert queued'
-                    : 'Send Verus test alert'}
-                </button>
-              )}
               <div className="mt-4 space-y-2">
                 <div className="flex items-center gap-2 text-[11px] uppercase tracking-[0.12em] text-white/25">
                   <ShieldCheck className="w-3 h-3" />
@@ -784,68 +884,7 @@ export default function App() {
                     {inboxNotice}
                   </div>
                 )}
-                {inboxQrDataUrl && (
-                  <div className="space-y-3 rounded-lg border border-white/[0.08] bg-white/[0.03] px-3 py-3">
-                    <div className="flex items-center gap-3">
-                      <img
-                        src={inboxQrDataUrl}
-                        alt="Verus wallet challenge QR"
-                        className="h-28 w-28 rounded-xl border border-white/10 bg-white p-2"
-                      />
-                      <div className="space-y-1">
-                        <div className="text-[10px] uppercase tracking-[0.12em] text-white/25">Wallet QR</div>
-                        <div className="text-[11px] text-white/55 font-sans leading-relaxed">
-                          Scan this in Verus Mobile to approve the inbox challenge.
-                        </div>
-                        {inboxRequestUri && (
-                          <div className="text-[10px] text-white/30 font-sans break-all">{inboxRequestUri}</div>
-                        )}
-                      </div>
-                    </div>
-                    <div>
-                      <div className="text-[10px] uppercase tracking-[0.12em] text-white/25">Challenge text</div>
-                      <div className="mt-1 whitespace-pre-wrap break-words text-[11px] text-white/55 font-sans">{inboxChallenge}</div>
-                    </div>
-                    <div>
-                      <div className="text-[10px] uppercase tracking-[0.12em] text-white/25">Fallback signature</div>
-                      <input
-                        type="text"
-                        placeholder="Paste the signed challenge only if QR approval doesn’t callback"
-                        aria-label="Wallet signature fallback"
-                        value={inboxSignature}
-                        onChange={(e) => setInboxSignature(e.target.value)}
-                        className="mt-2 w-full bg-black/30 border border-white/[0.08] rounded-lg px-3 py-2.5 text-caption text-white/70 placeholder:text-white/20 focus:outline-none focus:border-white/20 transition-colors font-sans"
-                      />
-                    </div>
-                    <button
-                      type="button"
-                      onClick={handleUnlockInbox}
-                      disabled={inboxStatus === 'loading'}
-                      className="w-full rounded-lg border border-white/[0.15] bg-white px-4 py-2.5 text-micro uppercase tracking-[0.12em] text-black transition-colors hover:bg-white/90 disabled:opacity-50"
-                    >
-                      {inboxStatus === 'loading' ? 'Unlocking' : 'Unlock inbox'}
-                    </button>
-                  </div>
-                )}
-                {inboxMessages.length > 0 ? (
-                  <div className="space-y-2">
-                    {inboxMessages.slice(0, 3).map((message) => (
-                      <div key={message.id} className="rounded-lg border border-white/[0.08] bg-white/[0.03] px-3 py-2">
-                        <div className="flex items-center justify-between gap-2">
-                          <span className="text-caption text-white/80 font-sans truncate">{message.subject}</span>
-                          <span className={`text-[10px] uppercase tracking-[0.12em] ${message.verified ? 'text-green-400' : 'text-white/25'}`}>
-                            {message.status}
-                          </span>
-                        </div>
-                        <p className="mt-1 text-[11px] text-white/45 font-sans leading-relaxed whitespace-pre-wrap">{message.body}</p>
-                        <div className="mt-2 flex items-center justify-between text-[10px] text-white/25">
-                          <span>{message.recipientVerusId}</span>
-                          <span>{new Date(message.createdAt).toLocaleString()}</span>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
+                {!inboxQrDataUrl && !inboxNotice && (
                   <p className="text-[11px] text-white/30 font-sans">
                     Request a challenge, sign it in your Verus wallet, and unlock the inbox.
                   </p>
@@ -1014,6 +1053,100 @@ export default function App() {
                 </div>
               </div>
             </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+      <AnimatePresence>
+        {showQrModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/85 backdrop-blur-2xl"
+            onClick={(e) => { if (e.target === e.currentTarget) setShowQrModal(false); }}
+          >
+            <motion.div
+              initial={{ scale: 0.97, opacity: 0, y: 8 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.97, opacity: 0, y: 8 }}
+              transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
+              className="w-full max-w-sm bg-neutral-900 border border-white/[0.06] rounded-2xl p-6 relative overflow-hidden shadow-2xl"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <button
+                type="button"
+                onClick={() => setShowQrModal(false)}
+                className="absolute top-4 right-4 text-white/20 hover:text-white/60 transition-colors"
+                aria-label="Close QR modal"
+              >
+                <X className="w-4 h-4" />
+              </button>
+
+              <div className="flex flex-col items-center">
+                <div className="text-[10px] uppercase tracking-[0.12em] text-white/25 mb-3 font-sans">Scan with Verus Mobile</div>
+                {inboxQrDataUrl && (
+                  <img
+                    src={inboxQrDataUrl}
+                    alt="Verus wallet challenge QR"
+                    className="w-48 h-48 rounded-xl border border-white/10 bg-white p-3"
+                  />
+                )}
+                <div className="mt-3 text-[11px] text-white/55 font-sans text-center leading-relaxed">
+                  Open Verus Mobile, scan the QR, and approve the request to unlock your inbox.
+                </div>
+                <div className="mt-4 w-full">
+                  <div className="text-[10px] uppercase tracking-[0.12em] text-white/25 mb-1.5 font-sans">Request ID</div>
+                  <div className="whitespace-pre-wrap break-words text-[10px] text-white/40 font-mono bg-black/30 rounded-lg p-2.5 border border-white/[0.04] max-h-20 overflow-y-auto select-all">
+                    {typeof inboxChallenge === 'string' ? inboxChallenge : JSON.stringify(inboxChallenge)}
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleUnlockInbox}
+                  disabled={inboxStatus === 'loading'}
+                  className="mt-4 w-full rounded-lg border border-white/[0.15] bg-white px-4 py-2.5 text-micro uppercase tracking-[0.12em] text-black transition-colors hover:bg-white/90 disabled:opacity-50"
+                >
+                  {inboxStatus === 'loading' ? 'Checking' : 'Check inbox'}
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+      <AnimatePresence>
+        {view === 'inbox' && (
+          <motion.div
+            key="inbox-view"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.15 }}
+          >
+            <InboxView
+              messages={paginatedMessages}
+              allCount={filteredMessages.length}
+              totalPages={totalPages}
+              currentPage={inboxPage}
+              selectedMessageId={selectedMessageId}
+              readMessageIds={readMessageIds}
+              searchQuery={inboxSearchQuery}
+              filter={inboxFilter}
+              verusId={inboxVerusId}
+              expandedSignatures={expandedSignatures}
+              onSelectMessage={(id) => {
+                setSelectedMessageId(id);
+                setReadMessageIds(prev => new Set(prev).add(id));
+              }}
+              onBack={() => {
+                setView('main');
+                handleLockInbox();
+              }}
+              onSearchChange={(q) => { setInboxSearchQuery(q); setInboxPage(1); }}
+              onFilterChange={(f) => { setInboxFilter(f); setInboxPage(1); }}
+              onPageChange={setInboxPage}
+              onToggleSignature={toggleSignature}
+              formatRelativeTime={formatRelativeTime}
+            />
           </motion.div>
         )}
       </AnimatePresence>
